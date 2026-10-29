@@ -9,6 +9,7 @@ bad input: every failure is a FAIL line.
 """
 import json
 import os
+import stat
 import sys
 
 PATH = sys.argv[1] if len(sys.argv) > 1 else "oauth/client.json"
@@ -49,26 +50,38 @@ def reject_constant(name):
     raise ValueError("non-standard JSON constant " + name)
 
 
-# The file itself: a regular file, not a link, readable, and small.
+# The file itself: a regular file, not a link, readable, and small. The
+# path is looked up once with lstat, then opened without following links
+# and checked again on the open descriptor, so nothing can be swapped in
+# between the check and the read.
 try:
     st = os.lstat(PATH)
 except OSError as exc:
     check(False, f"{PATH} exists and is readable: {exc.strerror or exc}")
     finish()
-if not check(not os.path.islink(PATH), f"{PATH} is not a symbolic link"):
+if not check(not stat.S_ISLNK(st.st_mode), f"{PATH} is not a symbolic link"):
     finish()
-if not check(os.path.isfile(PATH), f"{PATH} is a regular file"):
+if not check(stat.S_ISREG(st.st_mode), f"{PATH} is a regular file"):
+    finish()
+flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_BINARY", 0)
+try:
+    fd = os.open(PATH, flags)
+except OSError as exc:
+    check(False, f"{PATH} could be opened: {exc.strerror or exc}")
     finish()
 try:
-    with open(PATH, "rb") as f:
-        raw = f.read(MAX_BYTES + 1)
+    if not check(stat.S_ISREG(os.fstat(fd).st_mode), f"{PATH} is still a regular file once opened"):
+        finish()
+    raw = os.read(fd, MAX_BYTES + 1)
 except OSError as exc:
     check(False, f"{PATH} could be read: {exc.strerror or exc}")
     finish()
-check(len(raw) <= MAX_BYTES, f"size {min(len(raw), MAX_BYTES + 1)} bytes is at most {MAX_BYTES}"
-      + (" (read stopped at the cap)" if len(raw) > MAX_BYTES else ""))
+finally:
+    os.close(fd)
 if len(raw) > MAX_BYTES:
+    check(False, f"size is over {MAX_BYTES} bytes (read stopped at {MAX_BYTES + 1})")
     finish()
+check(True, f"size {len(raw)} bytes is at most {MAX_BYTES}")
 check(not raw.startswith(b"\xef\xbb\xbf"), "style: no byte order mark")
 check(b"\r" not in raw, "style: no carriage returns")
 check(raw.endswith(b"}\n"), "style: ends with a closing brace and one newline")
