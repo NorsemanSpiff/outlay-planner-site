@@ -1,0 +1,61 @@
+name: Validate client metadata (trusted)
+
+# The check a pull request is judged by. It runs main's copy of the
+# script, never the pull request's: the checkout is the base branch, and
+# the only thing taken from the pull request is the bytes of its
+# oauth/client.json, read from the pull request's git ref with git show.
+# No pull request code or workflow is executed here. That is why the
+# pull_request_target trigger is safe in this file and must stay so:
+# never check out the pull request's head, never run anything from it.
+#
+# Known limit: a required status check is matched by its name, and any
+# pull_request workflow can post a job with this name. The guards against
+# that are the repository's, not this file's: only the owner can merge,
+# and CODEOWNERS routes every change under .github/ to the owner. Review
+# any pull request that touches .github/ before merging it.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-trusted:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out main, not the pull request
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Take only the candidate document's bytes from the pull request
+        if: github.event_name == 'pull_request_target'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "pull/${PR_NUMBER}/head"
+          fetched="$(git rev-parse FETCH_HEAD)"
+          if [ "$fetched" != "$HEAD_SHA" ]; then
+            echo "FAIL the fetched pull request head ($fetched) is not the event's head ($HEAD_SHA); the next push re-runs this check"
+            exit 1
+          fi
+          mode="$(git ls-tree FETCH_HEAD oauth/client.json | awk '{print $1}')"
+          if [ "$mode" != "100644" ]; then
+            echo "FAIL oauth/client.json must be a regular, non-executable file in the tree (mode 100644); found ${mode:-no entry}"
+            exit 1
+          fi
+          echo "PASS oauth/client.json is a regular file in the pull request's tree (mode 100644)"
+          mkdir -p "$RUNNER_TEMP/candidate/oauth"
+          git show "FETCH_HEAD:oauth/client.json" > "$RUNNER_TEMP/candidate/oauth/client.json"
+      - name: Check the candidate document with main's script
+        if: github.event_name == 'pull_request_target'
+        run: python3 .github/scripts/check_client_metadata.py "$RUNNER_TEMP/candidate/oauth/client.json"
+      - name: Check main's own document (manual dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        run: python3 .github/scripts/check_client_metadata.py oauth/client.json
