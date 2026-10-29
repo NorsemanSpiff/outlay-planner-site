@@ -1,5 +1,10 @@
 name: Validate client metadata
 
+# Runs the check from the pull request's own copy of the repository. It
+# tells the author what is wrong. The check a pull request is judged by
+# is the trusted one in validate-client-metadata-trusted.yml, which runs
+# main's copy of the script against the pull request's document.
+
 on:
   pull_request:
   push:
@@ -17,66 +22,4 @@ jobs:
         with:
           persist-credentials: false
       - name: Check oauth/client.json against the client id rules
-        shell: python
-        run: |
-          # The expected document, member by member. Changing the document
-          # means changing these constants in the same reviewed diff.
-          import json, sys
-
-          PATH = "oauth/client.json"
-          CLIENT_ID = "https://norsemanspiff.github.io/planning-grid-site/oauth/client.json"
-          CLIENT_NAME = "Planning Grid"
-          REDIRECT_URIS = ["https://aldonbbgfcjhggiepdaempkffbkgkhhh.chromiumapp.org/"]
-          GRANT_TYPES = ["authorization_code", "refresh_token"]
-          RESPONSE_TYPES = ["code"]
-          MEMBERS = {"client_id", "client_name", "redirect_uris", "grant_types",
-                     "response_types", "token_endpoint_auth_method"}
-          MAX_BYTES = 5000  # the stricter reading of "5KB"
-          failures = []
-
-          def check(ok, label):
-              print(("PASS " if ok else "FAIL ") + label)
-              if not ok:
-                  failures.append(label)
-
-          def no_duplicates(pairs):
-              keys = [k for k, _ in pairs]
-              if len(keys) != len(set(keys)):
-                  raise ValueError("duplicate key " + repr(keys))
-              return dict(pairs)
-
-          def reject_constant(name):
-              raise ValueError("non-standard JSON constant " + name)
-
-          raw = open(PATH, "rb").read()
-          check(len(raw) <= MAX_BYTES, f"size {len(raw)} bytes is at most {MAX_BYTES}")
-          check(not raw.startswith(b"\xef\xbb\xbf"), "style: no byte order mark")
-          check(b"\r" not in raw, "style: no carriage returns")
-          check(raw.endswith(b"}\n"), "style: ends with a closing brace and one newline")
-
-          doc = {}
-          try:
-              parsed = json.loads(raw.decode("utf-8"), object_pairs_hook=no_duplicates,
-                                  parse_constant=reject_constant)
-              check(isinstance(parsed, dict), "top level is a JSON object")
-              if isinstance(parsed, dict):
-                  doc = parsed
-          except Exception as exc:
-              check(False, f"strict JSON parse: {exc}")
-
-          check(set(doc) == MEMBERS, f"exactly the expected members (found {sorted(doc)})")
-          check(doc.get("client_id") == CLIENT_ID, "client_id is string-equal to the document URL")
-          check(doc.get("client_name") == CLIENT_NAME, f"client_name is {CLIENT_NAME!r}")
-          check(doc.get("redirect_uris") == REDIRECT_URIS, "redirect_uris is exactly the pinned extension redirect URL")
-          check(doc.get("token_endpoint_auth_method") == "none", "token_endpoint_auth_method is none")
-          check(doc.get("grant_types") == GRANT_TYPES, "grant_types is exactly authorization_code and refresh_token")
-          check(doc.get("response_types") == RESPONSE_TYPES, "response_types is exactly [code]")
-
-          text = raw.decode("utf-8", "replace").lower()
-          check(all(w not in text for w in ("secret", "jwk", "private", "begin ")),
-                "no secret, key or key-material wording anywhere in the body")
-
-          if failures:
-              print(f"\n{len(failures)} check(s) failed")
-              sys.exit(1)
-          print("\nall checks passed")
+        run: python3 .github/scripts/check_client_metadata.py oauth/client.json
