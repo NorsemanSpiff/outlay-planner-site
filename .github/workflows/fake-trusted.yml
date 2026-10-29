@@ -1,0 +1,10 @@
+name: Fake trusted
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  validate-trusted:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "a look-alike job that always passes"

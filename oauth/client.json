@@ -1,5 +1,5 @@
 {
-  "client_id": "https://norsemanspiff.github.io/planning-grid-site/oauth/client.json",
+  "client_id": "https://norsemanspiff.github.io/planning-grid-site/oauth/client.jsn",
   "client_name": "Planning Grid",
   "redirect_uris": [
     "https://aldonbbgfcjhggiepdaempkffbkgkhhh.chromiumapp.org/"
