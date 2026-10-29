@@ -13,7 +13,7 @@ import stat
 import sys
 
 PATH = sys.argv[1] if len(sys.argv) > 1 else "oauth/client.json"
-CLIENT_ID = "https://norsemanspiff.github.io/planning-grid-site/oauth/client.json"
+CLIENT_ID = "https://norsemanspiff.github.io/planning-grid-site/oauth/client.jsn"
 CLIENT_NAME = "Planning Grid"
 REDIRECT_URIS = ["https://aldonbbgfcjhggiepdaempkffbkgkhhh.chromiumapp.org/"]
 GRANT_TYPES = ["authorization_code", "refresh_token"]
