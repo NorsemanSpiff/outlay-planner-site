@@ -1,15 +1,1 @@
-{
-  "client_id": "https://norsemanspiff.github.io/planning-grid-site/oauth/client.json",
-  "client_name": "Planning Grid",
-  "redirect_uris": [
-    "https://aldonbbgfcjhggiepdaempkffbkgkhhh.chromiumapp.org/"
-  ],
-  "grant_types": [
-    "authorization_code",
-    "refresh_token"
-  ],
-  "response_types": [
-    "code"
-  ],
-  "token_endpoint_auth_method": "none"
-}
+README.md
